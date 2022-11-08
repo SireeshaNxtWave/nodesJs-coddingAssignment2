@@ -53,10 +53,17 @@ const authenticateJwtToken = (request, response, next) => {
   }
 };
 
+const changeFeedsToCamelCase = (each) => {
+  return {
+    username: each.username,
+    tweet: each.tweet,
+    dateTime: each.date_time,
+  };
+};
 // API 1
 app.post("/register/", async (request, response) => {
   const { username, name, gender, password } = request.body;
-  const hashedPassword = await bcrypt.hash(password, 20);
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   const selectUserQuery = `SELECT * FROM user WHERE username='${username}'`;
   const dbUser = await db.get(selectUserQuery);
@@ -71,7 +78,7 @@ app.post("/register/", async (request, response) => {
     } else {
       const registerNewUser = `INSERT INTO user
                 (username, name, password, gender)
-                VALUES ('${username}', '${name}', '${password}', '${gender}')`;
+                VALUES ('${username}', '${name}', '${hashedPassword}', '${gender}')`;
       await db.run(registerNewUser);
       response.status(200);
       response.send("User created successfully");
@@ -116,13 +123,13 @@ app.get(
     const selectTweets = `SELECT user.username, 
                     tweet.tweet, tweet.date_time FROM tweet INNER JOIN user 
                     ON  tweet.user_id = user.user_id
-            WHERE tweet.user_id IN (SELECT following_user_id FROM
+            WHERE user.user_id IN (SELECT following_user_id FROM
                 follower WHERE follower_user_id=${loggedInUser.user_id})
             ORDER BY tweet.date_time DESC
             LIMIT 4`;
 
     const dbResponse = await db.all(selectTweets);
-    response.send(dbResponse);
+    response.send(dbResponse.map((each) => changeFeedsToCamelCase(each)));
   }
 );
 
@@ -267,7 +274,7 @@ app.get("/user/tweets/", authenticateJwtToken, async (request, response) => {
   const loggedInUser = await db.get(selectUser);
 
   const selectTweetsByUser = `SELECT tweet.tweet, (COUNT(like_id)) AS likes,
-                (COUNT(reply_id)) AS replies, tweet.date_time 
+                (COUNT(reply_id)) AS replies, tweet.date_time AS dateTime
                 FROM ((tweet INNER JOIN like ON tweet.tweet_id=like.tweet_id)
                 INNER JOIN reply ON tweet.tweet_id=reply.tweet_id)
                     WHERE tweet.user_id IN (${loggedInUser.user_id});`;
