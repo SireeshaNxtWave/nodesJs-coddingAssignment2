@@ -141,7 +141,7 @@ app.get("/user/following/", authenticateJwtToken, async (request, response) => {
 
   const loggedInUser = await db.get(selectUser);
 
-  const selectFollowingUsernames = `SELECT username FROM user
+  const selectFollowingUsernames = `SELECT username AS name FROM user
                 WHERE user_id IN (SELECT following_user_id FROM follower
                     WHERE follower_user_id = ${loggedInUser.user_id});`;
 
@@ -155,7 +155,7 @@ app.get("/user/followers/", authenticateJwtToken, async (request, response) => {
 
   const loggedInUser = await db.get(selectUser);
 
-  const selectFollowerUserNames = `SELECT username FROM user
+  const selectFollowerUserNames = `SELECT username AS name FROM user
                 WHERE user_id IN (SELECT follower_user_id FROM follower
                         WHERE following_user_id = ${loggedInUser.user_id});`;
 
@@ -168,23 +168,33 @@ app.get(
   authenticateJwtToken,
   async (request, response) => {
     const { username } = request;
+    const { tweetId } = request.params;
+    // console.log(tweetId);
+    const selectTweetById = `SELECT * FROM tweet WHERE tweet_id=${tweetId};`;
+
+    const tweetResult = await db.get(selectTweetById);
+    //console.log(tweetResult);
     const selectUser = `SELECT user_id FROM user WHERE username='${username}';`;
 
     const loggedInUser = await db.get(selectUser);
 
-    const selectTweetsById = `SELECT tweet.tweet, (COUNT(reply.reply_id)) AS replies,
-            (COUNT(like.like_id)) AS likes, tweet.date_time FROM ((tweet 
-            INNER JOIN reply ON tweet.tweet_id=reply.tweet_id) INNER JOIN like
-            ON tweet.tweet_id=like.tweet_id)
-            WHERE tweet.user_id IN (SELECT following_user_id FROM follower
-                        WHERE follower_user_id=${loggedInUser.user_id});`;
+    const userFollowersQuery = `
+    SELECT 
+    *
+  FROM follower INNER JOIN user on user.user_id = follower.following_user_id
+  WHERE follower.follower_user_id = ${loggedInUser.user_id};`;
 
-    if (selectTweetsById === undefined) {
+    const userFollowers = await db.all(userFollowersQuery);
+    //console.log(userFollowers);
+    if (
+      userFollowers.forEach(
+        (item) => item.following_user_id === tweetResult.user_id
+      )
+    ) {
+      response.send(item);
+    } else {
       response.status(401);
       response.send("Invalid Request");
-    } else {
-      const dbResponse = await db.all(selectTweetsById);
-      response.send(dbResponse);
     }
   }
 );
@@ -277,7 +287,7 @@ app.get("/user/tweets/", authenticateJwtToken, async (request, response) => {
                 (COUNT(reply_id)) AS replies, tweet.date_time AS dateTime
                 FROM ((tweet INNER JOIN like ON tweet.tweet_id=like.tweet_id)
                 INNER JOIN reply ON tweet.tweet_id=reply.tweet_id)
-                    WHERE tweet.user_id IN (${loggedInUser.user_id});`;
+                    WHERE tweet.user_id=${loggedInUser.user_id};`;
 
   const dbResponse = await db.all(selectTweetsByUser);
   response.send(dbResponse);
