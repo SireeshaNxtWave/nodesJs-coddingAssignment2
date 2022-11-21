@@ -141,9 +141,9 @@ app.get("/user/following/", authenticateJwtToken, async (request, response) => {
 
   const loggedInUser = await db.get(selectUser);
 
-  const selectFollowingUsernames = `SELECT username AS name FROM user
-                WHERE user_id IN (SELECT following_user_id FROM follower
-                    WHERE follower_user_id = ${loggedInUser.user_id});`;
+  const selectFollowingUsernames = `SELECT username AS name
+FROM follower INNER JOIN user on user.user_id = follower.following_user_id
+WHERE follower.follower_user_id = ${loggedInUser.user_id};`;
 
   const followingUserNames = await db.all(selectFollowingUsernames);
   response.send(followingUserNames);
